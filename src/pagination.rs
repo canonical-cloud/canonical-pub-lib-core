@@ -47,7 +47,7 @@ impl<'de> serde::Deserialize<'de> for PageRequest {
             limit: u16,
         }
 
-        let raw = RawPageRequest::deserialize(deserializer)?;
+        let raw = <RawPageRequest as serde::Deserialize>::deserialize(deserializer)?;
         Self::new(raw.cursor, raw.limit).map_err(serde::de::Error::custom)
     }
 }
@@ -67,10 +67,9 @@ impl fmt::Display for PageLimitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Zero => formatter.write_str("page limit must be greater than zero"),
-            Self::AboveMaximum { requested, maximum } => write!(
-                formatter,
-                "page limit {requested} exceeds maximum {maximum}"
-            ),
+            Self::AboveMaximum { requested, maximum } => {
+                write!(formatter, "page limit {requested} exceeds maximum {maximum}")
+            }
         }
     }
 }
