@@ -1,0 +1,38 @@
+[package]
+org = "canonical-cloud"
+name = "canonical-pub-lib-core"
+version = "0.1.0"
+description = "Publishable client-safe shared primitives for Canonical Cloud"
+language = "rust"
+
+[package.repository]
+vcs = "git"
+url = "https://github.com/canonical-cloud/canonical-pub-lib-core"
+
+[publish]
+include_readme = true
+tag_format = "v{version}"
+exclude = [
+  ".env",
+  ".env.*",
+  "env/dec/**",
+  ".vendor/.zed/**",
+  ".zed/**",
+  ".zed-pack/**",
+  "target/**",
+  "**/target/**",
+  "**/node_modules/**",
+  "**/.dart_tool/**",
+  "**/*.log",
+]
+
+[install]
+dir = ".vendor/.zed"
+
+[targets.rust]
+dir = "."
+adapter = "rust"
+
+[scripts]
+check-boundary = "bash scripts/check-public-boundary.sh"
+test = "cargo test --all-targets --all-features"
