@@ -5,8 +5,6 @@ pub const MAX_OPAQUE_ID_BYTES: usize = 256;
 
 /// A transport-safe identifier whose internal format is deliberately opaque.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct OpaqueId(String);
 
 impl OpaqueId {
@@ -56,6 +54,27 @@ impl TryFrom<&str> for OpaqueId {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::new(value)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for OpaqueId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for OpaqueId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = <String as serde::Deserialize>::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -120,8 +139,9 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn serde_representation_is_a_plain_string() {
+    fn serde_representation_is_a_plain_string_and_preserves_validation() {
         let id = OpaqueId::new("evidence-42").expect("valid fixture");
         assert_eq!(serde_json::to_string(&id).expect("serialize"), "\"evidence-42\"");
+        assert!(serde_json::from_str::<OpaqueId>("\" evidence-42\"").is_err());
     }
 }
