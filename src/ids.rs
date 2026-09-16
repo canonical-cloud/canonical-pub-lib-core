@@ -133,15 +133,24 @@ mod tests {
 
     #[test]
     fn rejects_boundary_whitespace_and_controls() {
-        assert_eq!(OpaqueId::new(" customer").unwrap_err(), IdError::BoundaryWhitespace);
-        assert_eq!(OpaqueId::new("customer\n9").unwrap_err(), IdError::ControlCharacter);
+        assert_eq!(
+            OpaqueId::new(" customer").unwrap_err(),
+            IdError::BoundaryWhitespace
+        );
+        assert_eq!(
+            OpaqueId::new("customer\n9").unwrap_err(),
+            IdError::ControlCharacter
+        );
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn serde_representation_is_a_plain_string_and_preserves_validation() {
         let id = OpaqueId::new("evidence-42").expect("valid fixture");
-        assert_eq!(serde_json::to_string(&id).expect("serialize"), "\"evidence-42\"");
+        assert_eq!(
+            serde_json::to_string(&id).expect("serialize"),
+            "\"evidence-42\""
+        );
         assert!(serde_json::from_str::<OpaqueId>("\" evidence-42\"").is_err());
     }
 }
