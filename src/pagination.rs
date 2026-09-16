@@ -5,7 +5,7 @@ pub const MAX_PAGE_LIMIT: u16 = 500;
 
 /// Cursor-based pagination request shared by client-facing APIs.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PageRequest {
     #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
     pub cursor: Option<String>,
@@ -18,6 +18,7 @@ impl PageRequest {
         Ok(Self { cursor, limit })
     }
 
+    #[must_use]
     pub fn with_default_limit(cursor: Option<String>) -> Self {
         Self {
             cursor,
@@ -30,6 +31,30 @@ impl Default for PageRequest {
     fn default() -> Self {
         Self::with_default_limit(None)
     }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PageRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct RawPageRequest {
+            #[serde(default)]
+            cursor: Option<String>,
+            #[serde(default = "default_page_limit")]
+            limit: u16,
+        }
+
+        let raw = RawPageRequest::deserialize(deserializer)?;
+        Self::new(raw.cursor, raw.limit).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+const fn default_page_limit() -> u16 {
+    DEFAULT_PAGE_LIMIT
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,5 +111,14 @@ mod tests {
                 maximum: MAX_PAGE_LIMIT,
             }
         );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialization_preserves_page_bounds() {
+        assert!(serde_json::from_str::<PageRequest>("{\"limit\":0}").is_err());
+        assert!(serde_json::from_str::<PageRequest>("{\"limit\":501}").is_err());
+        let defaulted = serde_json::from_str::<PageRequest>("{}").expect("default page request");
+        assert_eq!(defaulted.limit, DEFAULT_PAGE_LIMIT);
     }
 }
