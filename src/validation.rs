@@ -71,7 +71,8 @@ impl<'de> serde::Deserialize<'de> for ValidationErrors {
         D: serde::Deserializer<'de>,
     {
         let issues = <Vec<ValidationIssue> as serde::Deserialize>::deserialize(deserializer)?;
-        Self::from_vec(issues).ok_or_else(|| serde::de::Error::custom("validation errors must not be empty"))
+        Self::from_vec(issues)
+            .ok_or_else(|| serde::de::Error::custom("validation errors must not be empty"))
     }
 }
 
