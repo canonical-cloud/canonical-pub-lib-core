@@ -7,7 +7,10 @@ pub const MAX_PAGE_LIMIT: u16 = 500;
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PageRequest {
-    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
     pub cursor: Option<String>,
     pub limit: u16,
 }
@@ -68,7 +71,10 @@ impl fmt::Display for PageLimitError {
         match self {
             Self::Zero => formatter.write_str("page limit must be greater than zero"),
             Self::AboveMaximum { requested, maximum } => {
-                write!(formatter, "page limit {requested} exceeds maximum {maximum}")
+                write!(
+                    formatter,
+                    "page limit {requested} exceeds maximum {maximum}"
+                )
             }
         }
     }
