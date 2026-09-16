@@ -25,7 +25,7 @@ impl ValidationIssue {
 
 /// One or more deterministic validation failures.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct ValidationErrors(Vec<ValidationIssue>);
 
@@ -64,6 +64,17 @@ impl ValidationErrors {
     }
 }
 
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for ValidationErrors {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let issues = <Vec<ValidationIssue> as serde::Deserialize>::deserialize(deserializer)?;
+        Self::from_vec(issues).ok_or_else(|| serde::de::Error::custom("validation errors must not be empty"))
+    }
+}
+
 impl fmt::Display for ValidationErrors {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "validation failed with {} issue(s)", self.len())
@@ -88,5 +99,11 @@ mod tests {
     #[test]
     fn empty_vectors_do_not_create_error_sets() {
         assert_eq!(ValidationErrors::from_vec(Vec::new()), None);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialization_rejects_empty_error_sets() {
+        assert!(serde_json::from_str::<ValidationErrors>("[]").is_err());
     }
 }
