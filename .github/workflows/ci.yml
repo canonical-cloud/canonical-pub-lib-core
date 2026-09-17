@@ -2,6 +2,11 @@ name: ci
 
 on:
   pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,24 +16,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Require generated RPC evidence to match active source PR head
+      - name: Require generated RPC evidence to match active source revision
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           source .route-map-sources.lock
-          active_pr_head="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/63 --jq .head.sha)"
+
+          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/63)"
+          pr_state="$(jq -r '.state' <<<"$pr_json")"
+          merged_at="$(jq -r '.merged_at // empty' <<<"$pr_json")"
+          if [[ "$pr_state" == "open" ]]; then
+            expected_source_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+            source_state="open-pr-head"
+          elif [[ -n "$merged_at" ]]; then
+            expected_source_sha="$(jq -r '.merge_commit_sha' <<<"$pr_json")"
+            source_state="merged-pr-commit"
+          else
+            echo "::error::canonical-api-server.rs#63 is closed without merge; generated public RPC evidence has no valid rollout authority" >&2
+            exit 1
+          fi
+
           manifest_sha="$(jq -er '.source_commit_sha' generated/rpc/regular/manifest.json)"
           audience="$(jq -er '.audience' generated/rpc/regular/manifest.json)"
           scope="$(jq -er '.scope' generated/rpc/regular/manifest.json)"
 
-          test "$CANONICAL_API_SERVER_SHA" = "$active_pr_head" || {
-            echo "::error::.route-map-sources.lock is stale: lock=$CANONICAL_API_SERVER_SHA active_pr_head=$active_pr_head" >&2
+          test "$CANONICAL_API_SERVER_SHA" = "$expected_source_sha" || {
+            echo "::error::.route-map-sources.lock is stale: lock=$CANONICAL_API_SERVER_SHA expected_source=$expected_source_sha source_state=$source_state" >&2
             exit 1
           }
-          test "$manifest_sha" = "$active_pr_head" || {
-            echo "::error::generated/rpc/regular/manifest.json is stale: source_commit_sha=$manifest_sha active_pr_head=$active_pr_head" >&2
+          test "$manifest_sha" = "$expected_source_sha" || {
+            echo "::error::generated/rpc/regular/manifest.json is stale: source_commit_sha=$manifest_sha expected_source=$expected_source_sha source_state=$source_state" >&2
             exit 1
           }
           test "$audience" = "public" || {
@@ -43,7 +62,7 @@ jobs:
             echo "::error::admin RPC evidence must never exist in canonical-pub-lib-core" >&2
             exit 1
           }
-          printf 'rpc_source_pr_head=%s\n' "$active_pr_head"
+          printf 'rpc_source_state=%s\nrpc_source_sha=%s\n' "$source_state" "$expected_source_sha"
       - uses: dtolnay/rust-toolchain@688313b0823df1393bcebb1b4add0438a6d36884 # 1.88.0
         with:
           components: rustfmt, clippy
