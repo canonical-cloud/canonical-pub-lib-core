@@ -73,13 +73,3 @@ export class RpcClient {
     return receipt.body;
   }
 }
-
-/** Named calls generated from handlers.rs operation names. */
-
-/** Invoke authoritative handler `get_version`. */
-export async function getVersion(
-  client: RpcClient,
-  args: RpcCallArgs = {},
-): Promise<unknown> {
-  return client.call("canonical_cloud.version.get_version", args);
-}

@@ -19,7 +19,7 @@ const Service = "canonical-api-server"
 const HTTPPath = "/v1/rpc"
 
 var operations = map[string]struct{}{
-	"canonical_cloud.version.get_version": {},
+    "canonical_cloud.version.get_version": {},
 }
 
 type CallArgs struct {
@@ -63,9 +63,7 @@ func (c *Client) Call(ctx context.Context, key string, args CallArgs, out any) e
         return fmt.Errorf("RPC operation not generated for this audience: %s", key)
     }
     id := fmt.Sprintf("go-%d", c.sequence.Add(1))
-    envelope := map[string]any{
-        "v": 1, "op": "call", "id": id, "key": key, "transport": "http",
-    }
+    envelope := map[string]any{"v": 1, "op": "call", "id": id, "key": key, "transport": "http"}
     if args.Path != nil { envelope["path"] = args.Path }
     if args.Query != nil { envelope["query"] = args.Query }
     if args.Headers != nil { envelope["headers"] = args.Headers }
@@ -90,11 +88,4 @@ func (c *Client) Call(ctx context.Context, key string, args CallArgs, out any) e
     if !receipt.OK { return fmt.Errorf("RPC %s failed with status %d", key, receipt.Status) }
     if out != nil && len(receipt.Body) != 0 { return json.Unmarshal(receipt.Body, out) }
     return nil
-}
-
-// Named calls generated from handlers.rs operation names.
-
-// GetVersion invokes authoritative handler get_version through the generated RPC client.
-func GetVersion(ctx context.Context, client *Client, args CallArgs, out any) error {
-	return client.Call(ctx, "canonical_cloud.version.get_version", args, out)
 }
