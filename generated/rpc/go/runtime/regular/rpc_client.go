@@ -13,7 +13,7 @@ import (
     "sync/atomic"
 )
 
-const ContractSHA256 = "a3c2fd5085845aca6d12329e5b5904b3e8162a51dd92f5b241020ad5470865f9"
+const ContractSHA256 = "02603d769032c190ede8ec40d60fd4a9106b1bd5c0e565aae52be8fd9a10eee3"
 const ClientAudience = "public"
 const Service = "canonical-api-server"
 const HTTPPath = "/v1/rpc"

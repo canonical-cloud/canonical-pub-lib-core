@@ -2,7 +2,7 @@
 import gleam/dynamic
 import gleam/json
 
-pub const rpc_contract_sha256 = "a3c2fd5085845aca6d12329e5b5904b3e8162a51dd92f5b241020ad5470865f9"
+pub const rpc_contract_sha256 = "02603d769032c190ede8ec40d60fd4a9106b1bd5c0e565aae52be8fd9a10eee3"
 pub const rpc_client_audience = "public"
 pub const rpc_service = "canonical-api-server"
 pub const rpc_http_path = "/v1/rpc"
