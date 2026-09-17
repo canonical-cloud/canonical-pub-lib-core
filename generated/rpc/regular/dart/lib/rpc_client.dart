@@ -77,3 +77,26 @@ class OresRpcClient {
     return receipt['body'];
   }
 }
+
+// Named calls generated from handlers.rs operation names.
+
+/// Invokes authoritative handler `get_version`.
+Future<Object?> getVersion(
+  OresRpcClient client, {
+  Map<String, Object?>? path,
+  Map<String, Object?>? query,
+  Map<String, Object?>? headers,
+  Object? body,
+  String? traceId,
+  String? spanId,
+}) {
+  return client.call(
+    "canonical_cloud.version.get_version",
+    path: path,
+    query: query,
+    headers: headers,
+    body: body,
+    traceId: traceId,
+    spanId: spanId,
+  );
+}
