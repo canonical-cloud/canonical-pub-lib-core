@@ -11,6 +11,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Require generated RPC evidence to match active source PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .route-map-sources.lock
+          active_pr_head="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/63 --jq .head.sha)"
+          manifest_sha="$(jq -er '.source_commit_sha' generated/rpc/regular/manifest.json)"
+          audience="$(jq -er '.audience' generated/rpc/regular/manifest.json)"
+          scope="$(jq -er '.scope' generated/rpc/regular/manifest.json)"
+
+          test "$CANONICAL_API_SERVER_SHA" = "$active_pr_head" || {
+            echo "::error::.route-map-sources.lock is stale: lock=$CANONICAL_API_SERVER_SHA active_pr_head=$active_pr_head" >&2
+            exit 1
+          }
+          test "$manifest_sha" = "$active_pr_head" || {
+            echo "::error::generated/rpc/regular/manifest.json is stale: source_commit_sha=$manifest_sha active_pr_head=$active_pr_head" >&2
+            exit 1
+          }
+          test "$audience" = "public" || {
+            echo "::error::public generated RPC audience widened or changed: $audience" >&2
+            exit 1
+          }
+          test "$scope" = "regular" || {
+            echo "::error::public generated RPC scope widened or changed: $scope" >&2
+            exit 1
+          }
+          test ! -e generated/rpc/admin || {
+            echo "::error::admin RPC evidence must never exist in canonical-pub-lib-core" >&2
+            exit 1
+          }
+          printf 'rpc_source_pr_head=%s\n' "$active_pr_head"
       - uses: dtolnay/rust-toolchain@688313b0823df1393bcebb1b4add0438a6d36884 # 1.88.0
         with:
           components: rustfmt, clippy
