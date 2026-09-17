@@ -72,6 +72,18 @@ for rpc_file in "${required_rpc_files[@]}"; do
   }
 done
 
+for root in rust golang dart typescript gleam; do
+  test -s "src/langs/$root/generated/README.md" || { echo "error: missing generated README for $root" >&2; exit 1; }
+  test -s "src/langs/$root/generated/AGENTS.md" || { echo "error: missing generated AGENTS.md for $root" >&2; exit 1; }
+done
+
+for legacy in rust go dart typescript gleam; do
+  test ! -e "generated/rpc/$legacy" || {
+    echo "error: legacy generated/rpc/$legacy language tree remains" >&2
+    exit 1
+  }
+done
+
 if grep -REn \
   --include='*.ts' --include='*.dart' --include='*.go' --include='*.gleam' \
   'Promise<unknown>|RpcCallArgs|Future<Object\?>|dynamic\.Dynamic|out any' \
