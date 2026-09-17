@@ -91,3 +91,10 @@ func (c *Client) Call(ctx context.Context, key string, args CallArgs, out any) e
     if out != nil && len(receipt.Body) != 0 { return json.Unmarshal(receipt.Body, out) }
     return nil
 }
+
+// Named calls generated from handlers.rs operation names.
+
+// GetVersion invokes authoritative handler get_version through the generated RPC client.
+func GetVersion(ctx context.Context, client *Client, args CallArgs, out any) error {
+	return client.Call(ctx, "canonical_cloud.version.get_version", args, out)
+}
