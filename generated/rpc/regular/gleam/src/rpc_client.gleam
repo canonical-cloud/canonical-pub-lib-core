@@ -75,3 +75,15 @@ pub fn call(
     }
   }
 }
+
+// Named calls generated from handlers.rs operation names.
+
+/// Invoke authoritative handler `get_version`.
+pub fn get_version(
+  transport: Transport,
+  base_url: String,
+  id: String,
+  args: CallArgs,
+) -> Result(dynamic.Dynamic, String) {
+  call(transport, base_url, id, "canonical_cloud.version.get_version", args)
+}
