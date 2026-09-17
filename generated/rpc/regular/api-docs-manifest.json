@@ -5,6 +5,8 @@
   "audience": "public",
   "contract_sha256": "a3c2fd5085845aca6d12329e5b5904b3e8162a51dd92f5b241020ad5470865f9",
   "operations": [
+    "canonical_cloud.user.find_users",
+    "canonical_cloud.user.find_user_by_id",
     "canonical_cloud.version.get_version"
   ],
   "languages": [

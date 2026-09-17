@@ -10,18 +10,17 @@ pub const rpc_http_path = "/v1/rpc"
 pub type CallArgs {
   CallArgs(path: List(#(String, json.Json)), query: List(#(String, json.Json)), headers: List(#(String, json.Json)), body: Option(json.Json), trace_id: Option(String), span_id: Option(String))
 }
-
 pub type Transport {
   Transport(fn(String, String) -> Result(String, String))
 }
-
 pub fn operation_allowed(key: String) -> Bool {
   case key {
+    "canonical_cloud.user.find_users" -> True
+    "canonical_cloud.user.find_user_by_id" -> True
     "canonical_cloud.version.get_version" -> True
     _ -> False
   }
 }
-
 pub fn call(transport: Transport, base_url: String, id: String, key: String, args: CallArgs) -> Result(dynamic.Dynamic, String) {
   case operation_allowed(key) {
     False -> Error("RPC operation not generated for this audience")

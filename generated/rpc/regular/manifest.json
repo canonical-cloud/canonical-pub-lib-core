@@ -12,6 +12,8 @@
   "audience": "public",
   "scope": "regular",
   "operations": [
+    "canonical_cloud.user.find_users",
+    "canonical_cloud.user.find_user_by_id",
     "canonical_cloud.version.get_version"
   ],
   "languages": [

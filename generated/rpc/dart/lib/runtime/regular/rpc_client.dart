@@ -5,29 +5,25 @@ const rpcContractSha256 = "a3c2fd5085845aca6d12329e5b5904b3e8162a51dd92f5b241020
 const rpcClientAudience = "public";
 const rpcService = "canonical-api-server";
 const rpcHttpPath = "/v1/rpc";
-const rpcOperations = <String>{"canonical_cloud.version.get_version"};
+const rpcOperations = <String>{"canonical_cloud.user.find_users", "canonical_cloud.user.find_user_by_id", "canonical_cloud.version.get_version"};
 
 class RpcHttpResponse {
   const RpcHttpResponse(this.statusCode, this.body);
   final int statusCode;
   final String body;
 }
-
 typedef RpcHttpTransport = Future<RpcHttpResponse> Function(Uri uri, Map<String, String> headers, String body);
-
 class RpcRemoteException implements Exception {
   const RpcRemoteException(this.receipt);
   final Map<String, Object?> receipt;
   @override
   String toString() => 'RPC ${receipt['key']} failed with status ${receipt['status']}';
 }
-
 class OresRpcClient {
   OresRpcClient({required this.baseUri, required this.transport});
   final Uri baseUri;
   final RpcHttpTransport transport;
   int _sequence = 0;
-
   Future<Object?> call(String key, {Map<String, Object?>? path, Map<String, Object?>? query, Map<String, Object?>? headers, Object? body, String? traceId, String? spanId}) async {
     if (!rpcOperations.contains(key)) throw ArgumentError.value(key, 'key', 'RPC operation not generated for this audience');
     final id = 'dart-${DateTime.now().microsecondsSinceEpoch}-${_sequence++}';
