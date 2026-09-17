@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   public-core:
@@ -76,3 +76,100 @@ jobs:
         run: cargo test --all-targets --all-features
       - name: Clippy
         run: cargo clippy --all-targets --all-features
+
+  rpc-cli-materialize:
+    name: deterministic ores-stack RPC materialization
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out client PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Resolve immutable API source revisions
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN || github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve_source() {
+            local repo="$1" pr="$2" prefix="$3"
+            local payload state merged_at sha
+            payload="$(gh api "repos/$repo/pulls/$pr")"
+            state="$(jq -r '.state' <<<"$payload")"
+            merged_at="$(jq -r '.merged_at // empty' <<<"$payload")"
+            if [[ "$state" == "open" ]]; then
+              sha="$(jq -r '.head.sha' <<<"$payload")"
+            elif [[ -n "$merged_at" ]]; then
+              sha="$(jq -r '.merge_commit_sha' <<<"$payload")"
+            else
+              echo "::error::$repo#$pr is closed without merge" >&2
+              exit 1
+            fi
+            echo "${prefix}_sha=$sha" >> "$GITHUB_OUTPUT"
+          }
+          resolve_source canonical-cloud/canonical-api-server.rs 64 regular
+
+      - name: Check out exact regular API source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: canonical-cloud/canonical-api-server.rs
+          ref: ${{ steps.source.outputs.regular_sha }}
+          path: ../rpc-source-regular
+          token: ${{ secrets.SYNC_FLEET_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Check out immutable ores-stack generator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/ores-stack
+          ref: 1b278f304da40c4da1bd54de3f4b3710c2d6f4cc
+          path: ../ores-stack
+          persist-credentials: false
+
+      - name: Install Rust for ores-stack
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: stable
+
+      - name: Build exact ores-stack CLI
+        shell: bash
+        run: cargo build --manifest-path ../ores-stack/Cargo.toml -p ores-stack-cli --release
+
+      - name: Materialize and prove byte-for-byte determinism
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORES_STACK="../ores-stack/target/release/ores-stack"
+          "$ORES_STACK" sync --given ../rpc-source-regular
+          "$ORES_STACK" sync --given ../rpc-source-regular --check
+
+      - name: Reject non-generator drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad="$(git status --porcelain | awk '{print $2}' | grep -Ev '^(src/langs/|generated/rpc/)' || true)"
+          if [[ -n "$bad" ]]; then
+            echo "::error::ores-stack changed paths outside src/langs/ and generated/rpc/:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Commit exact ores-stack output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A src/langs generated/rpc
+          if git diff --cached --quiet; then
+            echo "ores-stack output already current"
+            exit 0
+          fi
+          git config user.name "ores-stack-rpc-bot"
+          git config user.email "ores-stack-rpc-bot@users.noreply.github.com"
+          git commit -m "chore(rpc): regenerate clients with ores-stack"
+          git push origin "HEAD:${{ github.head_ref }}"
