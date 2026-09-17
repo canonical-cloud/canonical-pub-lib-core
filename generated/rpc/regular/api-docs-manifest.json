@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "generated_by": "ores-api-docs rpc_client_bundle_v2",
+  "service": "canonical-api-server",
+  "audience": "public",
+  "contract_sha256": "a3c2fd5085845aca6d12329e5b5904b3e8162a51dd92f5b241020ad5470865f9",
+  "operations": [
+    "canonical_cloud.version.get_version"
+  ],
+  "languages": [
+    "rust",
+    "go",
+    "dart",
+    "typescript",
+    "gleam"
+  ],
+  "http_endpoint": "/v1/rpc"
+}
