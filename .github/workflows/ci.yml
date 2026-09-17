@@ -90,6 +90,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Prepare ignored deterministic tool/source work area
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '.rpc-work/' >> .git/info/exclude
+
       - name: Resolve immutable API source revisions
         id: source
         env:
@@ -120,7 +126,7 @@ jobs:
         with:
           repository: canonical-cloud/canonical-api-server.rs
           ref: ${{ steps.source.outputs.regular_sha }}
-          path: ../rpc-source-regular
+          path: .rpc-work/source-regular
           token: ${{ secrets.SYNC_FLEET_TOKEN || github.token }}
           persist-credentials: false
 
@@ -129,7 +135,7 @@ jobs:
         with:
           repository: ORESoftware/ores-stack
           ref: 1b278f304da40c4da1bd54de3f4b3710c2d6f4cc
-          path: ../ores-stack
+          path: .rpc-work/ores-stack
           persist-credentials: false
 
       - name: Install Rust for ores-stack
@@ -139,15 +145,15 @@ jobs:
 
       - name: Build exact ores-stack CLI
         shell: bash
-        run: cargo build --manifest-path ../ores-stack/Cargo.toml -p ores-stack-cli --release
+        run: cargo build --manifest-path .rpc-work/ores-stack/Cargo.toml -p ores-stack-cli --release
 
       - name: Materialize and prove byte-for-byte determinism
         shell: bash
         run: |
           set -euo pipefail
-          ORES_STACK="../ores-stack/target/release/ores-stack"
-          "$ORES_STACK" sync --given ../rpc-source-regular
-          "$ORES_STACK" sync --given ../rpc-source-regular --check
+          ORES_STACK=".rpc-work/ores-stack/target/release/ores-stack"
+          "$ORES_STACK" sync --given .rpc-work/source-regular
+          "$ORES_STACK" sync --given .rpc-work/source-regular --check
 
       - name: Reject non-generator drift
         shell: bash
