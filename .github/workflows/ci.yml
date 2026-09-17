@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           source .route-map-sources.lock
 
-          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/63)"
+          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/64)"
           pr_state="$(jq -r '.state' <<<"$pr_json")"
           merged_at="$(jq -r '.merged_at // empty' <<<"$pr_json")"
           if [[ "$pr_state" == "open" ]]; then
