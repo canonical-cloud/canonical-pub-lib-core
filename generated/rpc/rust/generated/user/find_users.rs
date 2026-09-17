@@ -15,3 +15,13 @@ impl ::ores_rpc_calls_http_tcp_pool::RpcCall for CanonicalCloudUserFindUsersCall
     const HAS_BODY: bool = false;
 }
 impl ::ores_rpc_calls_http_tcp_pool::HttpRpcCall<::ores_rpc_calls_http_tcp_pool::Post> for CanonicalCloudUserFindUsersCall {}
+
+pub async fn find_users(
+    client: &::ores_rpc_calls_http_tcp_pool::HttpRpcClient,
+    request: &::ores_rpc_calls_http_tcp_pool::RpcRequest<CanonicalCloudUserFindUsersCall>,
+) -> ::core::result::Result<
+    <CanonicalCloudUserFindUsersCall as ::ores_rpc_calls_http_tcp_pool::RpcCall>::Response,
+    ::ores_rpc_calls_http_tcp_pool::RpcError,
+> {
+    client.call::<CanonicalCloudUserFindUsersCall, ::ores_rpc_calls_http_tcp_pool::Post>(request).await
+}
