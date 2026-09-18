@@ -1,0 +1,106 @@
+name: Public RPC external-evidence materialization
+
+on:
+  pull_request:
+    paths:
+      - "scripts/sync-rpc-from-evidence.sh"
+      - ".github/workflows/rpc-external-evidence-materialize.yml"
+      - "generated/rpc/**"
+      - "src/langs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact client head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare isolated work area and require fleet read credential
+        env:
+          SOURCE_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SOURCE_TOKEN:-}" || { echo "::error::SYNC_FLEET_TOKEN is required for exact private source checkout"; exit 1; }
+          printf '%s\n' '.rpc-work/' >> .git/info/exclude
+      - name: Check out exact regular API authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: canonical-cloud/canonical-api-server.rs
+          ref: 3426fbb308430d85223145dfc5639969354e129d
+          token: ${{ secrets.SYNC_FLEET_TOKEN }}
+          path: .rpc-work/source-regular
+          persist-credentials: false
+      - name: Generate regular TJSV evidence
+        uses: ORESoftware/typespec-json-schema-validator@bd503465dab8c5148fee722b443ed04ff126c9bf
+        with:
+          typespec: .rpc-work/source-regular/contracts/rpc/version/main.tsp
+          schema: .rpc-work/source-regular/contracts/rpc/version/authored.schema.json
+          report: .rpc-work/evidence-regular/report.json
+          sarif: ""
+          contract_ir: .rpc-work/evidence-regular/contract-ir.json
+          output_dir: .rpc-work/evidence-regular/generated
+          max_probes: "128"
+      - name: Admit exact regular declarations
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@bd503465dab8c5148fee722b443ed04ff126c9bf
+        with:
+          contract_ir: .rpc-work/evidence-regular/contract-ir.json
+          report: .rpc-work/evidence-regular/report.json
+          typespec: .rpc-work/source-regular/contracts/rpc/version/main.tsp
+          schema: .rpc-work/source-regular/contracts/rpc/version/authored.schema.json
+          generated_schema: .rpc-work/evidence-regular/generated/typespec.generated.schema.json
+          expected_declarations: '["CanonicalCloud.Rpc.Version.VersionResponse","CanonicalCloud.Rpc.Version.VersionError","CanonicalCloud.Rpc.Version.UserLookupHeaders","CanonicalCloud.Rpc.Version.FindUsersRequest","CanonicalCloud.Rpc.Version.FindUsersResponse","CanonicalCloud.Rpc.Version.FindUserByIdRequest","CanonicalCloud.Rpc.Version.FindUserByIdResponse","CanonicalCloud.Rpc.Version.UserLookupError"]'
+      - name: Check out external-evidence-capable ores-stack
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/ores-stack
+          ref: 1a2f0000eff3ffc77a9c0c4f009d3e38684f569b
+          path: .rpc-work/ores-stack
+          persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: stable
+      - name: Build exact generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path .rpc-work/ores-stack/Cargo.toml -p ores-stack-cli --release
+          echo "$PWD/.rpc-work/ores-stack/target/release" >> "$GITHUB_PATH"
+      - name: Generate public clients from exact evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/sync-rpc-from-evidence.sh .rpc-work/source-regular .rpc-work/evidence-regular/contract-ir.json .rpc-work/evidence-regular/report.json public regular
+          bash scripts/check-public-boundary.sh
+      - name: Reject non-generator drift and record patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad="$(git status --porcelain | awk '{print $2}' | grep -Ev '^(src/langs/|generated/rpc/|\.route-map-sources\.lock)' || true)"
+          if [[ -n "$bad" ]]; then echo "::error::generator changed unexpected paths"; printf '%s\n' "$bad"; exit 1; fi
+          git diff --binary -- src/langs generated/rpc .route-map-sources.lock > .rpc-work/generated-rpc.patch
+          test -s .rpc-work/generated-rpc.patch || echo "generated public RPC tree is already current"
+      - name: Upload exact generated public projection
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: canonical-public-rpc-generated-${{ github.sha }}
+          path: |
+            src/langs/
+            generated/rpc/
+            .route-map-sources.lock
+            .rpc-work/generated-rpc.patch
+            .rpc-work/evidence-regular/report.json
+            .rpc-work/evidence-regular/contract-ir.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
