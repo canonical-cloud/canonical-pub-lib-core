@@ -24,20 +24,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Prepare isolated work area and require fleet read credential
-        env:
-          SOURCE_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
+      - name: Prepare isolated work area
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${SOURCE_TOKEN:-}" || { echo "::error::SYNC_FLEET_TOKEN is required for exact private source checkout"; exit 1; }
           printf '%s\n' '.rpc-work/' >> .git/info/exclude
-      - name: Check out exact regular API authority
+      - name: Check out exact public regular API authority
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: canonical-cloud/canonical-api-server.rs
-          ref: 3426fbb308430d85223145dfc5639969354e129d
-          token: ${{ secrets.SYNC_FLEET_TOKEN }}
+          ref: b6473deaa52713213cbf99279a12f82fa49b2a37
           path: .rpc-work/source-regular
           persist-credentials: false
       - name: Generate regular TJSV evidence
@@ -59,11 +55,11 @@ jobs:
           schema: .rpc-work/source-regular/contracts/rpc/version/authored.schema.json
           generated_schema: .rpc-work/evidence-regular/generated/typespec.generated.schema.json
           expected_declarations: '["CanonicalCloud.Rpc.Version.VersionResponse","CanonicalCloud.Rpc.Version.VersionError","CanonicalCloud.Rpc.Version.UserLookupHeaders","CanonicalCloud.Rpc.Version.FindUsersRequest","CanonicalCloud.Rpc.Version.FindUsersResponse","CanonicalCloud.Rpc.Version.FindUserByIdRequest","CanonicalCloud.Rpc.Version.FindUserByIdResponse","CanonicalCloud.Rpc.Version.UserLookupError"]'
-      - name: Check out external-evidence-capable ores-stack
+      - name: Check out handlers-authoritative ores-stack
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ORESoftware/ores-stack
-          ref: 1a2f0000eff3ffc77a9c0c4f009d3e38684f569b
+          ref: 454edfa43c2eb975f3ff08e831da59e612715e1b
           path: .rpc-work/ores-stack
           persist-credentials: false
       - name: Install Rust
