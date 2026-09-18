@@ -76,3 +76,156 @@ jobs:
         run: cargo test --all-targets --all-features
       - name: Clippy
         run: cargo clippy --all-targets --all-features
+
+  den4078-private-evidence-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: canonical-admin
+            repo: canonical-cloud/canonical-admin-api-server.rs
+            ref: DEN-4078-materialize-evidence-v4
+            typespec: contracts/rpc/version/main.tsp
+            schema: contracts/rpc/version/authored.schema.json
+            expected: '["CanonicalCloud.Admin.Rpc.Version.VersionResponse","CanonicalCloud.Admin.Rpc.Version.VersionError","CanonicalCloud.Admin.Rpc.Version.FindUsersHeaders","CanonicalCloud.Admin.Rpc.Version.FindUsersRequest","CanonicalCloud.Admin.Rpc.Version.FindUsersResponse","CanonicalCloud.Admin.Rpc.Version.FindUsersError"]'
+          - name: sonus-regular
+            repo: sonus-auris/sonus-auris-api-server.rs
+            ref: DEN-4078-materialize-evidence-v3
+            typespec: contracts/rpc-version/main.tsp
+            schema: contracts/rpc-version/authored.schema.json
+            expected: '["SonusAurisVersion.VersionError","SonusAurisVersion.VersionResponse","SonusAurisVersion.UserLookupHeaders","SonusAurisVersion.FindUsersRequest","SonusAurisVersion.FindUsersResponse","SonusAurisVersion.FindUserByIdRequest","SonusAurisVersion.FindUserByIdResponse","SonusAurisVersion.UserLookupError"]'
+          - name: sonus-admin
+            repo: sonus-auris/sonus-auris-admin-api-server.rs
+            ref: DEN-4078-materialize-evidence-v3
+            typespec: contracts/rpc-version/main.tsp
+            schema: contracts/rpc-version/authored.schema.json
+            expected: '["SonusAurisAdminVersion.VersionError","SonusAurisAdminVersion.VersionResponse","SonusAurisAdminVersion.FindUsersHeaders","SonusAurisAdminVersion.FindUsersRequest","SonusAurisAdminVersion.FindUsersResponse","SonusAurisAdminVersion.FindUsersError"]'
+
+    steps:
+      - name: Require fleet credential
+        shell: bash
+        env:
+          SYNC_FLEET_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${SYNC_FLEET_TOKEN:-}" || {
+            echo "::error::SYNC_FLEET_TOKEN is required for the private source bridge"
+            exit 1
+          }
+
+      - name: Check out exact private source branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref }}
+          token: ${{ secrets.SYNC_FLEET_TOKEN }}
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Record exact source head
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+
+      - name: Install Rust for lock regeneration
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: stable
+
+      - name: Configure approved private dependency access
+        shell: bash
+        env:
+          SYNC_FLEET_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config --global url."https://x-access-token:${SYNC_FLEET_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Regenerate and validate Cargo.lock
+        shell: bash
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+          cargo metadata --locked --format-version 1 --no-deps >/dev/null
+
+      - name: Remove temporary dependency URL rewrite
+        if: ${{ always() }}
+        shell: bash
+        env:
+          SYNC_FLEET_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config --global --unset-all url."https://x-access-token:${SYNC_FLEET_TOKEN}@github.com/".insteadOf || true
+
+      - name: Generate peer-authority receipt and Contract IR
+        uses: ORESoftware/typespec-json-schema-validator@bd503465dab8c5148fee722b443ed04ff126c9bf
+        with:
+          typespec: ${{ matrix.typespec }}
+          schema: ${{ matrix.schema }}
+          report: .typespec-json-schema-validator/report.json
+          contract_ir: .typespec-json-schema-validator/contract-ir.json
+          output_dir: .typespec-json-schema-validator/generated
+          max_probes: "128"
+
+      - name: Require admitted declarations
+        uses: ORESoftware/typespec-json-schema-validator/actions/test-consumer-admission@bd503465dab8c5148fee722b443ed04ff126c9bf
+        with:
+          contract_ir: .typespec-json-schema-validator/contract-ir.json
+          report: .typespec-json-schema-validator/report.json
+          typespec: ${{ matrix.typespec }}
+          schema: ${{ matrix.schema }}
+          generated_schema: .typespec-json-schema-validator/generated/typespec.generated.schema.json
+          expected_declarations: ${{ matrix.expected }}
+
+      - name: Verify authored authorities unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- "${{ matrix.typespec }}" "${{ matrix.schema }}"
+
+      - name: Commit only generator-owned reproducibility evidence
+        shell: bash
+        env:
+          SYNC_FLEET_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
+          TARGET_REPO: ${{ matrix.repo }}
+          TARGET_REF: ${{ matrix.ref }}
+        run: |
+          set -euo pipefail
+          git add -f Cargo.lock             .typespec-json-schema-validator/report.json             .typespec-json-schema-validator/contract-ir.json
+
+          unexpected="$(git diff --cached --name-only | grep -Ev '^(Cargo\.lock|\.typespec-json-schema-validator/(report|contract-ir)\.json)$' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::refusing unexpected staged paths"
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+
+          if git diff --cached --quiet; then
+            echo "evidence already current"
+            exit 0
+          fi
+
+          git config user.name "ores-stack-rpc-bot"
+          git config user.email "ores-stack-rpc-bot@users.noreply.github.com"
+          git commit -m "chore(rpc): materialize lock and contract evidence"
+          git remote set-url origin "https://x-access-token:${SYNC_FLEET_TOKEN}@github.com/${TARGET_REPO}.git"
+          git push origin "HEAD:${TARGET_REF}"
+
+      - name: Verify committed exact evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files --error-unmatch Cargo.lock
+          git ls-files --error-unmatch .typespec-json-schema-validator/report.json
+          git ls-files --error-unmatch .typespec-json-schema-validator/contract-ir.json
+          test -s Cargo.lock
+          test -s .typespec-json-schema-validator/report.json
+          test -s .typespec-json-schema-validator/contract-ir.json
+          git diff --exit-code
