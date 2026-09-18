@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Require generated RPC evidence to match active source revision
         env:
           GH_TOKEN: ${{ github.token }}
@@ -24,7 +26,11 @@ jobs:
           set -euo pipefail
           source .route-map-sources.lock
 
-          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/63)"
+          # Keep this rollout authority identical to the immutable source used by
+          # rpc-external-evidence-materialize.yml. #68 is the compile-correct
+          # handlers-authoritative source repair; #66 predates that tree and can
+          # never match a manifest generated from the #68 merge commit.
+          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/68)"
           pr_state="$(jq -r '.state' <<<"$pr_json")"
           merged_at="$(jq -r '.merged_at // empty' <<<"$pr_json")"
           if [[ "$pr_state" == "open" ]]; then
@@ -34,7 +40,7 @@ jobs:
             expected_source_sha="$(jq -r '.merge_commit_sha' <<<"$pr_json")"
             source_state="merged-pr-commit"
           else
-            echo "::error::canonical-api-server.rs#63 is closed without merge; generated public RPC evidence has no valid rollout authority" >&2
+            echo "::error::canonical-api-server.rs#68 is closed without merge; generated public RPC evidence has no valid rollout authority" >&2
             exit 1
           fi
 

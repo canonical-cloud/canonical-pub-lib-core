@@ -3,15 +3,17 @@
   "generated_by": "ores-stack sync",
   "source_role": "api-server-handlers.rs",
   "source_repository": "https://github.com/canonical-cloud/canonical-api-server.rs.git",
-  "source_commit_sha": "b745832c53843ba5efef8f421d0397f02374cc80",
+  "source_commit_sha": "7c11db87659a2848e74d93a93b09200035e6b9d7",
   "source_route_map": "generated/rpc/server-route-map.json",
-  "source_route_map_sha256": "250641844bf523be1e266997c7aeb4e850400eb331a483993567023d5e9aa247",
+  "source_route_map_sha256": "cf067603392a297ad6de4a647bd476930770647770c083011317b3f3d0b998f9",
   "source_operation_index": "generated/rpc/server-operation-index.json",
-  "source_operation_index_sha256": "a592f48ec8d05b5f9ff499c123b84b1e30034e9e187339af3d0901d24978d170",
+  "source_operation_index_sha256": "9f67b73fcb2fa47c4a2df292909fc3544266b9782af019f89d9f379920e425f7",
   "service": "canonical-api-server",
   "audience": "public",
   "scope": "regular",
   "operations": [
+    "canonical_cloud.user.find_users",
+    "canonical_cloud.user.find_user_by_id",
     "canonical_cloud.version.get_version"
   ],
   "languages": [
