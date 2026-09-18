@@ -119,7 +119,7 @@ jobs:
             fi
             echo "${prefix}_sha=$sha" >> "$GITHUB_OUTPUT"
           }
-          resolve_source canonical-cloud/canonical-api-server.rs 64 regular
+          resolve_source canonical-cloud/canonical-api-server.rs 66 regular
 
       - name: Check out exact regular API source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -155,14 +155,15 @@ jobs:
           ORES_STACK=".rpc-work/ores-stack/target/release/ores-stack"
           "$ORES_STACK" sync --given .rpc-work/source-regular
           "$ORES_STACK" sync --given .rpc-work/source-regular --check
+          printf 'CANONICAL_API_SERVER_SHA=%s\n' "${{ steps.source.outputs.regular_sha }}" > .route-map-sources.lock
 
       - name: Reject non-generator drift
         shell: bash
         run: |
           set -euo pipefail
-          bad="$(git status --porcelain | awk '{print $2}' | grep -Ev '^(src/langs/|generated/rpc/)' || true)"
+          bad="$(git status --porcelain | awk '{print $2}' | grep -Ev '^(src/langs/|generated/rpc/|\.route-map-sources\.lock$)' || true)"
           if [[ -n "$bad" ]]; then
-            echo "::error::ores-stack changed paths outside src/langs/ and generated/rpc/:"
+            echo "::error::ores-stack materialization changed unexpected paths:"
             echo "$bad"
             exit 1
           fi
@@ -171,7 +172,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git add -A src/langs generated/rpc
+          git add -A src/langs generated/rpc .route-map-sources.lock
           if git diff --cached --quiet; then
             echo "ores-stack output already current"
             exit 0
