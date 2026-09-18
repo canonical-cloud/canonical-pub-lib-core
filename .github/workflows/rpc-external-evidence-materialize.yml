@@ -24,16 +24,20 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Prepare isolated work area
+      - name: Prepare isolated work area and require fleet read credential
+        env:
+          SOURCE_TOKEN: ${{ secrets.SYNC_FLEET_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          test -n "${SOURCE_TOKEN:-}" || { echo "::error::SYNC_FLEET_TOKEN is required for exact private source checkout"; exit 1; }
           printf '%s\n' '.rpc-work/' >> .git/info/exclude
       - name: Check out exact public regular API authority
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: canonical-cloud/canonical-api-server.rs
           ref: b6473deaa52713213cbf99279a12f82fa49b2a37
+          token: ${{ secrets.SYNC_FLEET_TOKEN }}
           path: .rpc-work/source-regular
           persist-credentials: false
       - name: Generate regular TJSV evidence
@@ -59,7 +63,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ORESoftware/ores-stack
-          ref: 454edfa43c2eb975f3ff08e831da59e612715e1b
+          ref: 1e6e62da666020883148e986c67eeb3f4b27cd1f
           path: .rpc-work/ores-stack
           persist-credentials: false
       - name: Install Rust
@@ -77,6 +81,13 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/sync-rpc-from-evidence.sh .rpc-work/source-regular .rpc-work/evidence-regular/contract-ir.json .rpc-work/evidence-regular/report.json public regular
+          manifest_sha="$(jq -er '.source_commit_sha' generated/rpc/regular/manifest.json)"
+          source_sha="$(git -C .rpc-work/source-regular rev-parse HEAD)"
+          test "$manifest_sha" = "$source_sha" || {
+            echo "::error::generated regular manifest is not bound to checked-out source" >&2
+            exit 1
+          }
+          printf 'CANONICAL_API_SERVER_SHA=%s\n' "$source_sha" > .route-map-sources.lock
           bash scripts/check-public-boundary.sh
       - name: Reject non-generator drift and record patch
         shell: bash
