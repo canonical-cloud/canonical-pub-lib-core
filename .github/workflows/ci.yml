@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           source .route-map-sources.lock
 
-          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/64)"
+          pr_json="$(gh api repos/canonical-cloud/canonical-api-server.rs/pulls/66)"
           pr_state="$(jq -r '.state' <<<"$pr_json")"
           merged_at="$(jq -r '.merged_at // empty' <<<"$pr_json")"
           if [[ "$pr_state" == "open" ]]; then
@@ -34,7 +34,7 @@ jobs:
             expected_source_sha="$(jq -r '.merge_commit_sha' <<<"$pr_json")"
             source_state="merged-pr-commit"
           else
-            echo "::error::canonical-api-server.rs#63 is closed without merge; generated public RPC evidence has no valid rollout authority" >&2
+            echo "::error::canonical-api-server.rs#66 is closed without merge; generated public RPC evidence has no valid rollout authority" >&2
             exit 1
           fi
 
@@ -134,8 +134,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ORESoftware/ores-stack
-          ref: 1b278f304da40c4da1bd54de3f4b3710c2d6f4cc
+          ref: 85ed2f3927ca0b4667aed5a2f96c2a47007ea8cc
           path: .rpc-work/ores-stack
+          token: ${{ secrets.SYNC_FLEET_TOKEN || github.token }}
           persist-credentials: false
 
       - name: Install Rust for ores-stack
