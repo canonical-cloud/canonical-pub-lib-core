@@ -29,19 +29,50 @@ for forbidden_path in .env env/dec env/decrypted; do
 done
 
 manifest="generated/rpc/regular/manifest.json"
+source_lock=".route-map-sources.lock"
 test -s "$manifest" || { echo "error: missing public RPC manifest" >&2; exit 1; }
+test -s "$source_lock" || { echo "error: missing public RPC source lock" >&2; exit 1; }
 test ! -e generated/rpc/admin || { echo "error: admin RPC evidence is forbidden in public client" >&2; exit 1; }
 
-for key in \
-  canonical_cloud.user.find_users \
-  canonical_cloud.user.find_user_by_id \
-  canonical_cloud.version.get_version
-do
-  grep -Fq "\"$key\"" "$manifest" || {
-    echo "error: public RPC manifest is missing $key" >&2
-    exit 1
-  }
-done
+node - "$manifest" "$source_lock" <<'NODE'
+const fs = require('node:fs');
+const [manifestPath, lockPath] = process.argv.slice(2);
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const lockText = fs.readFileSync(lockPath, 'utf8');
+const match = /^CANONICAL_API_SERVER_SHA=([0-9a-f]{40})$/m.exec(lockText);
+if (!match) throw new Error(`${lockPath}: expected one immutable CANONICAL_API_SERVER_SHA`);
+const lockedSha = match[1];
+const expectedOperations = [
+  'canonical_cloud.user.find_user_by_id',
+  'canonical_cloud.user.find_users',
+  'canonical_cloud.version.get_version',
+].sort();
+const actualOperations = [...(manifest.operations ?? [])].sort();
+if (new Set(actualOperations).size !== actualOperations.length) {
+  throw new Error(`${manifestPath}: duplicate operation key`);
+}
+if (JSON.stringify(actualOperations) !== JSON.stringify(expectedOperations)) {
+  throw new Error(`${manifestPath}: public operation inventory drift; expected ${JSON.stringify(expectedOperations)}, got ${JSON.stringify(actualOperations)}`);
+}
+if (manifest.schema_version !== 2) throw new Error(`${manifestPath}: unsupported schema_version ${manifest.schema_version}`);
+if (manifest.generated_by !== 'ores-stack sync') throw new Error(`${manifestPath}: unexpected generator ${manifest.generated_by}`);
+if (manifest.source_role !== 'api-server-handlers.rs') throw new Error(`${manifestPath}: source_role must be api-server-handlers.rs`);
+if (manifest.audience !== 'public') throw new Error(`${manifestPath}: audience must be public`);
+if (manifest.scope !== 'regular') throw new Error(`${manifestPath}: scope must be regular`);
+if (manifest.http_endpoint !== '/v1/rpc') throw new Error(`${manifestPath}: canonical RPC endpoint must be /v1/rpc`);
+if (!/^[0-9a-f]{40}$/.test(manifest.source_commit_sha ?? '')) throw new Error(`${manifestPath}: source_commit_sha is not immutable`);
+if (manifest.source_commit_sha !== lockedSha) throw new Error(`${manifestPath}: source_commit_sha disagrees with ${lockPath}`);
+if (!String(manifest.source_repository ?? '').includes('canonical-cloud/canonical-api-server.rs')) {
+  throw new Error(`${manifestPath}: unexpected source_repository ${manifest.source_repository}`);
+}
+if (!/^[0-9a-f]{64}$/.test(manifest.source_route_map_sha256 ?? '')) throw new Error(`${manifestPath}: missing source route-map digest`);
+if (!/^[0-9a-f]{64}$/.test(manifest.source_operation_index_sha256 ?? '')) throw new Error(`${manifestPath}: missing source operation-index digest`);
+const expectedLanguages = ['dart', 'gleam', 'go', 'rust', 'typescript'];
+const actualLanguages = [...(manifest.languages ?? [])].sort();
+if (JSON.stringify(actualLanguages) !== JSON.stringify(expectedLanguages)) {
+  throw new Error(`${manifestPath}: five-language inventory drift`);
+}
+NODE
 
 if grep -R -Fq 'canonical_cloud.admin.' generated/rpc src/langs 2>/dev/null; then
   echo "error: admin RPC key leaked into public client" >&2
@@ -93,4 +124,4 @@ then
   exit 1
 fi
 
-echo "public-boundary: ok"
+echo "public-boundary: manifest, source lock, operation inventory, and five-language surface agree"
